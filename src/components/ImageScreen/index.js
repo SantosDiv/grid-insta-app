@@ -1,14 +1,21 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import { StyleSheet, PanResponder, Animated } from 'react-native';
 
 export default function ImageScreen({ color = "skyblue", item, changePosition, data }) {
   const pan = useRef(new Animated.ValueXY()).current;
+  let isDragArea = true;
 
   const panResponder = useRef(
     PanResponder.create({
+      onStartShouldSetPanResponder: (e, gesture) => {
+        if (e.nativeEvent.pageY > item?.positionMaxY) {
+          isDragArea = false;
+        }
+
+        return true;
+      },
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e, gesture) => {
-        console.log(gesture) // O usuáro não pode arrastar a imagem a partir do canto inferior direito da área.
+      onPanResponderGrant: () => {
         pan.setOffset({
           x: pan.x._value,
           y: pan.y._value
@@ -23,39 +30,45 @@ export default function ImageScreen({ color = "skyblue", item, changePosition, d
           isDropAreaByCoordinate(e.nativeEvent.pageX, positionMaxX, positionMinX )
           && isDropAreaByCoordinate(e.nativeEvent.pageY, positionMaxY, positionMinY)
         ));
+        if (itemForChange?.buttonAddImage) {
+          animatedSpring(pan);
+          return;
+        }
 
-
-        // console.log(`X Page: ${e.nativeEvent.pageX}`);
-        // console.log(`Y Page: ${e.nativeEvent.pageY}`);
-
-        if (itemForChange && itemForChange !== item) {
+        if (itemForChange && itemForChange !== item && isDragArea) {
           changePosition(item, itemForChange);
         }
-        // console.log(`X maxima: ${item?.positionMaxX}`);
-        // console.log(`Y maxima: ${item?.positionMaxY}`);
-        // console.log(`X minima: ${item?.positionMinX}`);
-        // console.log(`Y minima: ${item?.positionMinY}`);
-        Animated.spring(
-          pan,
-          {
-            toValue: {x: 0, y: 0},
-            friction: 5,
-            useNativeDriver: false,
-        }).start();
+        resetIsDragArea();
+        animatedSpring(pan);
       }
     })
   ).current;
+
+  const animatedSpring = (pan) => {
+    Animated.spring(
+      pan,
+      {
+        toValue: {x: 0, y: 0},
+        friction: 5,
+        useNativeDriver: false,
+    }).start();
+  };
 
   const isDropAreaByCoordinate = (endPosition, positionMax, positionMin) => {
     return endPosition >= positionMin && endPosition <= positionMax
   };
 
+  const resetIsDragArea = () => {
+    isDragArea = true;
+  };
+
   return (
-    <Animated.View
+    <Animated.Image
       {...panResponder.panHandlers}
       style={[{ transform: [{translateX: pan.x}, {translateY: pan.y}]}, styles.square, { backgroundColor: color }]}
+      source={{ uri: item.uri }}
     >
-    </Animated.View>
+    </Animated.Image>
   );
 }
 
