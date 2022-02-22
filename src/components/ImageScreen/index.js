@@ -1,82 +1,50 @@
 import React, { useRef, useState } from 'react';
-import { StyleSheet, PanResponder, Animated } from 'react-native';
+import { StyleSheet, PanResponder, Animated, Button } from 'react-native';
 
-export default function ImageScreen({ color = "skyblue", item, changePosition, data }) {
+export default function ImageScreen({ item, setItemSelect, removeItem }) {
   const pan = useRef(new Animated.ValueXY()).current;
-  let isDragArea = true;
+  const [editing, setEditing] = useState(true);
+  const [selected, setSelected] = useState(false);
 
-  const panResponder = useRef(
+  const panResponder = editing ? useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: (e, gesture) => {
-        if (e.nativeEvent.pageY > item?.positionMaxY) {
-          isDragArea = false;
-        }
+      onStartShouldSetPanResponder: async () => {
+        setSelected(true)
+        await setItemSelect(item)
 
         return true;
       },
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        pan.setOffset({
-          x: pan.x._value,
-          y: pan.y._value
-        });
-      },
-      onPanResponderMove: Animated.event([
-        null,
-        { dx: pan.x, dy: pan.y }
-      ], {useNativeDriver: false}),
-      onPanResponderRelease: (e, gesture) => {
-        const itemForChange = data.find(({ positionMaxX, positionMinX, positionMinY, positionMaxY }) => (
-          isDropAreaByCoordinate(e.nativeEvent.pageX, positionMaxX, positionMinX )
-          && isDropAreaByCoordinate(e.nativeEvent.pageY, positionMaxY, positionMinY)
-        ));
-        if (itemForChange?.buttonAddImage) {
-          animatedSpring(pan);
-          return;
-        }
-
-        if (itemForChange && itemForChange !== item && isDragArea) {
-          changePosition(item, itemForChange);
-        }
-        resetIsDragArea();
-        animatedSpring(pan);
-      }
     })
-  ).current;
+  ).current :  { panHandlers: {} } ;
 
-  const animatedSpring = (pan) => {
-    Animated.spring(
-      pan,
-      {
-        toValue: {x: 0, y: 0},
-        friction: 5,
-        useNativeDriver: false,
-    }).start();
-  };
-
-  const isDropAreaByCoordinate = (endPosition, positionMax, positionMin) => {
-    return endPosition >= positionMin && endPosition <= positionMax
-  };
-
-  const resetIsDragArea = () => {
-    isDragArea = true;
-  };
+  const handlerRemoveItem = async () => {
+    await removeItem(item);
+  }
 
   return (
-    <Animated.Image
-      {...panResponder.panHandlers}
-      style={[{ transform: [{translateX: pan.x}, {translateY: pan.y}]}, styles.square, { backgroundColor: color }]}
-      source={{ uri: item.uri }}
-    >
-    </Animated.Image>
+
+    <Animated.View>
+      <Animated.Image
+        { ...panResponder.panHandlers }
+        style={[
+          { transform: [{translateX: pan.x}, {translateY: pan.y}]},
+          styles.item,
+          { opacity: selected ? 0.5 : 1 }
+        ]}
+        source={{ uri: item.uri }}
+      >
+      </Animated.Image>
+      { editing && <Button onPress={handlerRemoveItem} title="Delete" /> }
+    </Animated.View>
   );
 }
 
 
 const styles = StyleSheet.create({
-  square: {
+  item: {
     width: 130,
     height: 130,
-    marginLeft: 3
+    marginLeft: 3,
+    marginBottom: 3
   }
 });

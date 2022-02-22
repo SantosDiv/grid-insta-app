@@ -1,31 +1,27 @@
 import React, {useState, useCallback, useEffect} from 'react';
-import { StyleSheet, SafeAreaView, Animated, TouchableOpacity, Text } from 'react-native';
+import { StyleSheet, SafeAreaView, Animated, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import ImageScreen from './src/components/ImageScreen';
+import Header from './src/components/Header';
+import CreateItemsData from './src/application/usecases/createItemsData';
+import SetNewItem from './src/application/usecases/setNewItem';
+import ChangePosition from './src/application/usecases/changePosition';
+import RemoveItem from './src/application/usecases/removeItem';
+
 
 export default function App() {
-  const INITIAL_STATE = [
-    {
-      id: '3RDSD#SD24',
-      buttonAddImage: true
-    }
-  ];
-
-  const [dataState, setDataState] = useState(INITIAL_STATE);
+  const [items, setItems] = useState(undefined);
   const [, updateState] = useState();
   const forceUpdate = useCallback(() => updateState({}), []);
-  
-  const changePosition = (item, itemForChange) => {
-    const indexPositionPrevItem = dataState.indexOf(item);
-    const indexPositionNextItem = dataState.indexOf(itemForChange);
 
-    dataState.splice(indexPositionNextItem, 1, setNewCoordinates(item, itemForChange));
-
-    dataState.splice(indexPositionPrevItem, 1, setNewCoordinates(itemForChange, item));
-
-    setDataState(dataState);
-    forceUpdate();
-  }
+  useEffect(() => {
+    const initialLocalStorage = async () => {
+      const ucCreateItemsData = CreateItemsData.build();
+      const itemsDomain = await ucCreateItemsData.execute();
+      setItems(itemsDomain);
+    }
+    initialLocalStorage()
+  }, [])
 
   const handleChoosePhoto = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -35,80 +31,82 @@ export default function App() {
       quality: 1,
     });
     if (!result.cancelled) {
-      dataState.unshift({
-        id: Math.random() * 100,
-        uri: result.uri
-      });
-      ;
-      setDataState(setPositionKeys(dataState));
+      setNewItem(result)
+    }
+  };
+
+  const setNewItem = async (result) => {
+    const ucSetNewItem = SetNewItem.build();
+    const item = { id: Math.random() * 100, uri: result.uri }
+    const itemsDomain = await ucSetNewItem.execute(items, item);
+    setItems(itemsDomain);
+    forceUpdate();
+  }
+
+  const setItemSelect = async (item) => {
+    const ucChangePosition = ChangePosition.build();
+    const itemsDomain = await ucChangePosition.execute(items, item);
+
+    if (itemsDomain) {
+      setItems(itemsDomain);
       forceUpdate();
     }
   };
 
-  const setPositionKeys = (dataState) => {
-    const numLines = Math.ceil((dataState.length / 3));
-      let cont = 0;
-      let numColumns = dataState.length < 3 ? dataState.length : 3;
-      const widthSquare = 130;
-      for (let i = 0; i < numLines; i++) {
-        const positionMaxX = widthSquare;
-        const positionMinX = 0;
-        const positionMinY = widthSquare * i; // Inicia como 0 (130 * 0... 130 * n)
-        const positionMaxY = widthSquare * (i + 1); // 130 * 1...130 * n + 1
-        for (let j = 0; j < numColumns; j++) {
-          dataState[cont].positionMinX = positionMinX; // 0 (valor inicial)
-          dataState[cont].positionMinY = positionMinY; // 0 (valor inicial)
-          dataState[cont].positionMaxX = positionMaxX; // 130 (valor inicial)
-          dataState[cont].positionMaxY = positionMaxY; // 130 (valor inicial)
-          positionMaxX += widthSquare;
-          positionMinX += widthSquare;
-          cont++;
+  const removeItem = async (item) => {
+    Alert.alert(
+      'Excluir item',
+      'Tem certeza que deseja deletar este item?',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Sim',
+          onPress: async () => {
+            const ucRemoveItem = RemoveItem.build();
+            await ucRemoveItem.execute(items, item);
+            forceUpdate();
+          }
         }
-        numColumns = dataState.length - 3;
-      }
-    return dataState;
+      ]
+    )
+    
+    
+    
   }
-
-  const setNewCoordinates = (element, secondElement) => {
-    return {
-      ...element,
-      positionMaxX: secondElement.positionMaxX,
-      positionMaxY: secondElement.positionMaxY,
-      positionMinX: secondElement.positionMinX,
-      positionMinY: secondElement.positionMinY,
-    };
-  };
 
   const renderItem = ({ item }) => {
-    if (item.buttonAddImage) {
-      return (
-        <TouchableOpacity onPress={handleChoosePhoto} style={styles.buttonAddImage}>
-          <Text style={styles.buttonIcon}>+</Text>
-        </TouchableOpacity>
-      )
-    }
-    return <ImageScreen color={item.color} item={item} changePosition={changePosition} data={dataState}/>
+    return <ImageScreen
+      item={item}
+      setItemSelect={setItemSelect}
+      removeItem={removeItem}
+      />
   }
+
 
   return (
     <SafeAreaView style={styles.container}>
+      <Header handleChoosePhoto={handleChoosePhoto}/>
       <Animated.FlatList
-        data={dataState}
+        data={items?.getAll()}
         renderItem={renderItem}
         keyExtractor={ item => item.id }
         numColumns={3}
-        style={{ flexWrap: 'wrap', marginLeft: 5}}
+        style={styles.flatList}
+        nestedScrollEnabled
       />
+
     </SafeAreaView>
   );
 }
-
 
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#fff',
     justifyContent: 'center',
-    paddingTop: Platform.OS === 'android' ? 40 : 0
+    paddingTop: 40
   },
   buttonAddImage: {
     backgroundColor: '#e5e5e5',
@@ -120,5 +118,12 @@ const styles = StyleSheet.create({
   buttonIcon: {
     fontSize: 50,
     color: 'gray'
+  },
+  flatList: {
+    flexWrap: 'wrap',
+    marginLeft: 5,
+    height: 480,
+    paddingBottom: 40,
+    paddingTop: 0,
   }
 });
